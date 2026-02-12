@@ -1,9 +1,13 @@
 name: CI-CD-EKS
 
+
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch: # Se activa manualmente desde GitHub Actions
+
+#on:
+#  push:
+#    branches:       ## se activa cuando se hace push a la rama main o con git push origin main
+#      - main
 
 jobs:
   deploy:
