@@ -152,7 +152,7 @@ El proyecto incluye el operador de K8sGPT. Para usar la IA para depurar tu clús
     kubectl create secret generic k8sgpt-sample-secret --from-literal=openai-api-key=$OPENAI_KEY -n k8sgpt-operator-system
     
     # Aplica la configuración de K8sGPT
-    kubectl apply -f https://raw.githubusercontent.com/k8sgpt-ai/k8sgpt-operator/main/config/samples/k8sgpt_v1alpha1_k8sgpt.yaml
+    kubectl apply -f k8s/k8sgpt.yaml
     ```
 
 2.  **Ver análisis de IA:**
