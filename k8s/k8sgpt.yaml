@@ -12,6 +12,6 @@ spec:
       name: k8sgpt-sample-secret
       key: openai-api-key
   # Explicitly define the image and tag to fix the InvalidImageName error
-  image: ghcr.io/k8sgpt-ai/k8sgpt
-  tag: v0.3.9
+  repository: ghcr.io/k8sgpt-ai/k8sgpt
+  version: v0.3.9
   noCache: false
