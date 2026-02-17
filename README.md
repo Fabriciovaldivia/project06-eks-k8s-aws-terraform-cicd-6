@@ -160,25 +160,31 @@ Para acceder directamente a la interfaz de Prometheus y hacer consultas:
 2.  **Entra a la interfaz:**
     Abre en tu navegador: `http://localhost:9090`
 
-### 5. Diagnóstico con IA (K8sGPT + Ollama)
-**Actualización AIOps:** En esta versión, hemos reemplazado la dependencia de OpenAI por **Ollama**. Ahora, el análisis de inteligencia artificial se ejecuta **localmente** dentro de tu clúster EKS usando el modelo `gemma:2b`. Esto garantiza privacidad de datos y cero costos de API.
+### 5. Diagnóstico con IA (K8sGPT + OpenAI)
+Hemos configurado K8sGPT para usar el backend de **OpenAI** con el modelo `gpt-4o-mini`, lo que proporciona análisis rápidos y precisos.
 
 **Flujo de Validación:**
 
-1.  **Verificar que Ollama esté corriendo:**
-    Terraform despliega Ollama automáticamente. Verifica que el pod esté listo (puede tardar en descargar el modelo):
+1.  **Crear el Secreto de OpenAI:**
+    K8sGPT necesita tu API Key para funcionar. Ejecuta este comando sustituyendo `<TU_API_KEY>`:
     ```bash
-    kubectl get pods -n k8sgpt-operator-system -l app.kubernetes.io/name=ollama
+    kubectl create secret generic openai-secret \
+      --from-literal=api-key=<TU_API_KEY> \
+      -n k8sgpt-operator-system
+    ```
+    Verifica que el secreto se creó correctamente:
+    ```bash
+    kubectl get secrets -n k8sgpt-operator-system
     ```
 
-2.  **Configurar K8sGPT (Backend Local):**
-    Aplica el manifiesto que conecta K8sGPT con el servicio interno de Ollama:
+2.  **Aplicar Configuración K8sGPT:**
+    Esto despliega el analizador configurado para usar el secreto anterior:
     ```bash
     kubectl apply -f k8s/k8sgpt.yaml
     ```
 
 3.  **🧪 Prueba de Fuego (Chaos Testing):**
-    Vamos a romper algo intencionalmente para ver a la IA local en acción.
+    Vamos a romper algo intencionalmente para ver a la IA en acción.
 
     *   **Paso A: Crear un error:**
         ```bash
@@ -205,20 +211,20 @@ Para acceder directamente a la interfaz de Prometheus y hacer consultas:
 
     **Requisitos:**
     *   Tener la CLI de `k8sgpt` instalada en tu entorno.
-    *   Tener acceso de red al backend de IA (en este caso, el servicio de Ollama).
+    *   Tener una API Key de OpenAI configurada.
 
     **Ejemplo de uso:**
 
     Para analizar un tipo de recurso (como los Pods) y obtener una explicación de la IA, usa el flag `--explain`:
 
     ```bash
-    # Analiza todos los Pods con problemas y pide una explicación a Ollama
+    # Analiza todos los Pods con problemas y pide una explicación a OpenAI
     k8sgpt analyze --filter Pod --explain --backend openai
     ```
 
     **Salida de ejemplo:**
     ```
-    AI Provider: ollama
+    AI Provider: openai
 
     0: Pod default/prueba-error()
     - Error: Back-off pulling image "nginx:tag-inexistente": ErrImagePull...
