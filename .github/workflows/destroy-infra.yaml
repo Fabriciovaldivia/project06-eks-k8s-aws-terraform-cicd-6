@@ -24,7 +24,8 @@ jobs:
         run: |
           aws eks update-kubeconfig --name project05-eks --region us-east-1
           echo "Eliminando servicios LoadBalancer para liberar ENIs..."
-          kubectl delete svc --all --namespace default --timeout=10s || echo "No se pudieron eliminar servicios o ya no existen"
+          kubectl delete svc --all --all-namespaces --timeout=20s || echo "No se pudieron eliminar servicios o ya no existen"
+          kubectl delete k8sgpt --all --all-namespaces --timeout=10s || echo "No se pudieron eliminar los CRs de K8sGPT o ya no existen"
           sleep 60 # Espera crítica para que AWS elimine el LB y libere las IPs
 
       - name: 🔧 Configurar Terraform
