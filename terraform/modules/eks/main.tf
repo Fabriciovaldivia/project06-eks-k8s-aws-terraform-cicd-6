@@ -20,4 +20,10 @@ resource "aws_eks_node_group" "nodes" {
   }
 
   instance_types = ["t3.medium"]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  depends_on = [aws_eks_cluster.this]
 }
