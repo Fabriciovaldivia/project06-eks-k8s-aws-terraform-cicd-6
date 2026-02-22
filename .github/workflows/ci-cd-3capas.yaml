@@ -41,7 +41,8 @@ jobs:
       - name: 🔐 Configurar credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: us-east-1
 
       - name: 🛠️ Crear repositorio ECR si no existe
@@ -86,7 +87,8 @@ jobs:
       - name: 🔐 Configurar credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: us-east-1
 
       - name: 🛠️ Crear Backend S3 y DynamoDB para Terraform
