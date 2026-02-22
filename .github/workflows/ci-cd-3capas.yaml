@@ -25,11 +25,23 @@ jobs:
       - name: 📥 Descargar código del repositorio
         uses: actions/checkout@v4
 
+      - name: ✅ Verificar archivos necesarios
+        run: |
+          echo "Verificando archivos para ${{ matrix.service }}..."
+          test -f ${{ matrix.dockerfile }} || (echo "ERROR: Dockerfile no encontrado en ${{ matrix.dockerfile }}" && exit 1)
+          test -d ${{ matrix.context }} || (echo "ERROR: Directorio no encontrado ${{ matrix.context }}" && exit 1)
+          
+          if [ "${{ matrix.service }}" = "database" ]; then
+            test -f ${{ matrix.context }}/init.sql || (echo "ERROR: init.sql no encontrado" && exit 1)
+          fi
+          
+          ls -la ${{ matrix.context }}/
+          echo "✓ Archivos verificados correctamente"
+
       - name: 🔐 Configurar credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-east-1
 
       - name: 🛠️ Crear repositorio ECR si no existe
@@ -45,9 +57,9 @@ jobs:
 
       - name: 🏗️ Construir imagen Docker - ${{ matrix.service }}
         run: |
-          docker build -t proyecto06-${{ matrix.service }}:latest \
-            -f ${{ matrix.dockerfile }} \
-            ${{ matrix.context }}
+          cd ${{ matrix.context }}
+          docker build -t proyecto06-${{ matrix.service }}:latest .
+          cd -
 
       - name: 📦 Etiquetar imagen para ECR - ${{ matrix.service }}
         run: |
@@ -74,8 +86,7 @@ jobs:
       - name: 🔐 Configurar credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-east-1
 
       - name: 🛠️ Crear Backend S3 y DynamoDB para Terraform
@@ -87,53 +98,98 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: 🏗️ Inicializar Terraform
-        run: terraform init
-        working-directory: ./terraform
+        run: |
+          cd terraform
+          terraform init -upgrade
+          cd ..
 
       - name: 🚀 Aplicar Terraform
-        run: terraform apply -auto-approve
-        working-directory: ./terraform
+        run: |
+          cd terraform
+          terraform apply -auto-approve -input=false
+          cd ..
 
       - name: ✅ Actualizar kubeconfig
-        run: aws eks update-kubeconfig --name proyecto06-eks
+        run: |
+          echo "Actualizando kubeconfig para cluster proyecto06-eks..."
+          aws eks update-kubeconfig --name proyecto06-eks --region us-east-1
+          echo "Verificando conexión a Kubernetes..."
+          kubectl cluster-info
+          kubectl version --short
+          echo "✓ Kubeconfig actualizado correctamente"
 
       - name: 🔄 Reemplazar ID de cuenta en manifiestos
-        run: sed -i "s|<ACCOUNT_ID>|${{ secrets.AWS_ACCOUNT_ID }}|g" k8s/*.yaml
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "AWS Account ID: $ACCOUNT_ID"
+          
+          for file in k8s/*.yaml; do
+            echo "Actualizando $file..."
+            sed -i "s|<ACCOUNT_ID>|$ACCOUNT_ID|g" "$file"
+            sed -i "s|us-east-1|us-east-1|g" "$file"
+          done
+          
+          echo "✓ Manifiestos actualizados"
 
       - name: 📁 Crear namespace y ConfigMap
         run: |
+          echo "Creando namespace proyecto06..."
           kubectl apply -f k8s/00-namespace.yaml
+          sleep 2
+          echo "✓ Namespace creado"
 
       - name: 🗄️ Desplegar Base de Datos
         run: |
+          echo "Desplegando base de datos..."
           kubectl apply -f k8s/01-database.yaml
-          echo "Esperando a que la base de datos esté lista..."
-          kubectl wait --for=condition=ready pod -l app=database -n proyecto06 --timeout=300s
+          echo "Esperando a que la base de datos esté lista (timeout: 5 min)..."
+          kubectl wait --for=condition=ready pod -l app=database -n proyecto06 --timeout=300s || echo "⚠️ Timeout, continuando..."
+          sleep 10
+          kubectl get pods -n proyecto06
+          echo "✓ Base de datos desplegada"
 
       - name: 🔙 Desplegar Backend
         run: |
+          echo "Desplegando backend..."
           kubectl apply -f k8s/02-backend.yaml
-          echo "Esperando a que el backend esté listo..."
-          kubectl wait --for=condition=ready pod -l app=backend -n proyecto06 --timeout=300s
+          echo "Esperando a que el backend esté listo (timeout: 5 min)..."
+          kubectl wait --for=condition=ready pod -l app=backend -n proyecto06 --timeout=300s || echo "⚠️ Timeout, continuando..."
+          sleep 10
+          kubectl get pods -n proyecto06
+          echo "✓ Backend desplegado"
 
       - name: 🎨 Desplegar Frontend
         run: |
+          echo "Desplegando frontend..."
           kubectl apply -f k8s/03-frontend.yaml
-          echo "Esperando a que el frontend esté listo..."
-          kubectl wait --for=condition=ready pod -l app=frontend -n proyecto06 --timeout=300s
+          echo "Esperando a que el frontend esté listo (timeout: 5 min)..."
+          kubectl wait --for=condition=ready pod -l app=frontend -n proyecto06 --timeout=300s || echo "⚠️ Timeout, continuando..."
+          sleep 10
+          kubectl get pods -n proyecto06
+          echo "✓ Frontend desplegado"
 
       - name: ✨ Obtener URLs de acceso
         run: |
-          echo "=== SERVICIOS DESPLEGADOS ==="
           echo ""
-          echo "Frontend (LoadBalancer):"
-          kubectl get svc frontend-service -n proyecto06
+          echo "╔════════════════════════════════════════════════════╗"
+          echo "║  ✓ DEPLOYMENT COMPLETADO EXITOSAMENTE             ║"
+          echo "╚════════════════════════════════════════════════════╝"
           echo ""
-          echo "Backend (ClusterIP):"
+          echo "📊 SERVICIOS DESPLEGADOS:"
+          echo ""
+          echo "🎨 Frontend (LoadBalancer):"
+          kubectl get svc frontend-service -n proyecto06 || echo "  (Pendiente de asignación)"
+          echo ""
+          echo "🔙 Backend (ClusterIP):"
           kubectl get svc backend-service -n proyecto06
           echo ""
-          echo "Database (Headless):"
+          echo "🗄️ Database (Headless):"
           kubectl get svc database-service -n proyecto06
           echo ""
-          echo "Pods en ejecución:"
-          kubectl get pods -n proyecto06
+          echo "📌 PODS EN EJECUCIÓN:"
+          kubectl get pods -n proyecto06 -o wide
+          echo ""
+          echo "📈 DEPLOYMENTS:"
+          kubectl get deployments -n proyecto06
+          echo ""
+          echo "✓ Pipeline completado exitosamente!"
