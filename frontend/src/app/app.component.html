@@ -1,0 +1,44 @@
+<div class="container">
+  <header>
+    <h1>🚀 {{ title }}</h1>
+    <p>Aplicación web con arquitectura de 3 capas</p>
+  </header>
+
+  <main>
+    <section class="data-section">
+      <h2>Datos del Backend</h2>
+      
+      <button (click)="fetchBackendData()" [disabled]="loading">
+        {{ loading ? 'Cargando...' : 'Actualizar datos' }}
+      </button>
+
+      <div *ngIf="error" class="error">
+        <strong>Error:</strong> {{ error }}
+      </div>
+
+      <div *ngIf="backendData" class="success">
+        <h3>Información del Backend:</h3>
+        <pre>{{ backendData | json }}</pre>
+      </div>
+
+      <div *ngIf="loading && !backendData" class="loading">
+        ⏳ Conectando con backend...
+      </div>
+    </section>
+
+    <section class="info-section">
+      <h2>Arquitectura del Proyecto</h2>
+      <ul>
+        <li><strong>Frontend:</strong> Angular 17 + Nginx</li>
+        <li><strong>Backend:</strong> Python Fast API</li>
+        <li><strong>Database:</strong> PostgreSQL</li>
+        <li><strong>Orquestación:</strong> Kubernetes (EKS)</li>
+        <li><strong>IaC:</strong> Terraform</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Proyecto06 - CloudCamp Kubernetes</p>
+  </footer>
+</div>

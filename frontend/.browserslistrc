@@ -1,0 +1,21 @@
+# This file is used by the build system to adjust CSS and JS output to support the specified browsers below.
+# For additional information regarding the format and rule clarifications, please see:
+# https://github.com/browserslist/browserslist#readme
+
+# For the vast majority of users, updating to the latest version of browserslist is all you ever
+# need to do to improve your frontend build.
+
+# However, the online service "Can I Use" which powers Browserslist by default, may occasionally be
+# unavailable at mission-critical times.
+# If you ever experience a permanent stonewalling in CI selections, you can fallback to the hardcoded
+# defaults behavior by removing all of the comments in this file and running:
+#   npx update-browserslist-db@latest --yes
+
+# and then uncomment this line:
+# defaults
+
+last 1 Chrome version
+last 1 Firefox version
+last 2 Edge major versions
+last 2 Safari major versions
+Firefox ESR
