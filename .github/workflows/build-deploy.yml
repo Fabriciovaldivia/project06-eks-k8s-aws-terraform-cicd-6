@@ -68,22 +68,27 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: 🔧 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - name: � List files in ${{ matrix.service.path }}
+        run: |
+          echo "Files in ${{ matrix.service.path }}:"
+          ls -la ${{ matrix.service.path }}/
+          echo ""
+          echo "Dockerfile content:"
+          cat ${{ matrix.service.path }}/Dockerfile
 
       - name: 🐳 Build ${{ matrix.service.name }} image
-        uses: docker/build-push-action@v4
-        with:
-          context: ${{ matrix.service.path }}
-          push: false
-          tags: |
-            ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:latest
-            ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: |
+          echo "🔨 Building ${{ matrix.service.name }}..."
+          docker build \
+            -t ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:latest \
+            -t ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:${{ github.sha }} \
+            ${{ matrix.service.path }}/
+          echo "✓ ${{ matrix.service.name }} image built successfully"
 
-      - name: ✓ Build completed for ${{ matrix.service.name }}
-        run: echo "✓ ${{ matrix.service.name }} image built successfully"
+      - name: 📊 Show built images
+        run: |
+          echo "Built images:"
+          docker image ls | grep ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}
 
   # ========================================================================
   # PRUEBAS
@@ -123,6 +128,8 @@ jobs:
   # ========================================================================
   # PUSH A ECR (solo en main)
   # ========================================================================
+  # PUSH A ECR (solo en main)
+  # ========================================================================
   push-ecr:
     name: 📤 Push to AWS ECR
     runs-on: ubuntu-latest
@@ -151,24 +158,23 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: 🔧 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
       - name: 📤 Build and push ${{ matrix.service.name }} to ECR
-        uses: docker/build-push-action@v4
-        with:
-          context: ${{ matrix.service.path }}
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:latest
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: ✓ Push completed for ${{ matrix.service.name }}
         run: |
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          
+          echo "Building and pushing ${{ matrix.service.name }}..."
+          
+          docker build \
+            -t $REGISTRY/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:latest \
+            -t $REGISTRY/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:${{ github.sha }} \
+            ${{ matrix.service.path }}/
+          
+          echo "Pushing to ECR..."
+          docker push $REGISTRY/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:latest
+          docker push $REGISTRY/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:${{ github.sha }}
+          
           echo "✓ ${{ matrix.service.name }} pushed to ECR"
-          echo "  Registry: ${{ steps.login-ecr.outputs.registry }}"
+          echo "  Registry: $REGISTRY"
           echo "  Image: ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}"
           echo "  Tags: latest, ${{ github.sha }}"
 
