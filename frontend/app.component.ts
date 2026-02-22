@@ -24,11 +24,11 @@ export class AppComponent implements OnInit {
     
     // Conectar al backend (asumiendo que está en backend-service)
     this.http.get('/api/data').subscribe(
-      (data) => {
+      (data: any) => {
         this.backendData = data;
         this.loading = false;
       },
-      (error) => {
+      (error: any) => {
         this.error = 'Error conectando al backend: ' + error.message;
         this.loading = false;
       }

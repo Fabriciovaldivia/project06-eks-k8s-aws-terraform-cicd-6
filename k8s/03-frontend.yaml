@@ -36,7 +36,7 @@ spec:
           value: "http://backend-service:8000"
         livenessProbe:
           httpGet:
-            path: /health
+            path: /
             port: 80
             scheme: HTTP
           initialDelaySeconds: 20
