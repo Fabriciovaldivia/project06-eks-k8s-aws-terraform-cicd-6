@@ -1,0 +1,176 @@
+# === ESSENTIAL IGNORES ONLY ===
+
+# Dependencies (node, python)
+node_modules/
+venv/
+ENV/
+env/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.development
+.env.testing
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.sublime-workspace
+.sublime-project
+
+# OS specific
+.DS_Store
+Thumbs.db
+._*
+.localized
+.AppleDouble
+.LSOverride
+Icon?
+
+# Terraform state
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+.terraform.tfvars
+
+# AWS
+aws/
+.aws/
+secrets/
+.secrets
+.credentials
+
+# Logs
+logs/
+*.log
+npm-debug.log
+yarn-error.log
+
+# Database data files (not scripts)
+postgres_data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary
+tmp/
+temp/
+.tmp/
+.temp/
+.cache/
+*.tmp
+*.temp
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+.nyc_output/
+coverage/
+
+# Kubernetes configs
+kubeconfig
+kubeconfig.yaml
+*.kubeconfig
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Private certificates/keys only
+*.key
+*.p12
+*.pfx
+
+# Compiled/Build (but allow source)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.class
+*.jar
+target/
+out/
+
+# Gradle/Maven
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+.m2/
+
+# Ruby/Go/Rust
+.bundle/
+Gemfile.lock
+vendor/
+.gomod
+Cargo.lock
+
+# Java/C#
+.classpath
+.project
+.settings/
+.metadata
+bin/
+obj/
+*.user
+*.suo
+
+# Misc backups
+*.bak
+*.backup
+*.old
+~*
+*.orig
+*.rej
+
+# GitHub
+.github/workflows/*.bak
+.github/workflows/*.old
+
+# Docker compose overrides only
+docker-compose.override.yml
+
+# NVM
+.nvmrc
+
+# === ALLOW IMPORTANT FILES ===
+!.gitignore
+!**/.gitkeep
+!frontend/src/
+!frontend/angular.json
+!frontend/tsconfig.json
+!frontend/tsconfig.app.json
+!frontend/.browserslistrc
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/**/*.ts
+!frontend/**/*.html
+!frontend/**/*.css
+!frontend/**/*.json
+!frontend/Dockerfile
+!frontend/.dockerignore
+!frontend/nginx.conf
+!backend/requirements.txt
+!backend/**/*.py
+!backend/Dockerfile
+!database/init.sql
+!database/Dockerfile
+!**/Dockerfile
+!**/.dockerignore
+!**/nginx.conf
