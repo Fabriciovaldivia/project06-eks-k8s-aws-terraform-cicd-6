@@ -1,0 +1,103 @@
+version: '3.9'
+
+services:
+  # ========== DATABASE ==========
+  database:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    container_name: proyecto06-database
+    environment:
+      POSTGRES_USER: proyecto06
+      POSTGRES_PASSWORD: proyecto06
+      POSTGRES_DB: proyecto06_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - proyecto06-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proyecto06 -d proyecto06_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ========== BACKEND ==========
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: proyecto06-backend
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://proyecto06:proyecto06@database:5432/proyecto06_db"
+      DEBUG: "true"
+      API_ENV: "development"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - proyecto06-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # ========== FRONTEND ==========
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+    container_name: proyecto06-frontend
+    depends_on:
+      - backend
+    environment:
+      BACKEND_URL: "http://backend:8000"
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - proyecto06-network
+    command: npm start
+
+  # ========== NGINX (para servir frontend compilado) ==========
+  nginx:
+    image: nginx:alpine
+    container_name: proyecto06-frontend-prod
+    depends_on:
+      - frontend
+      - backend
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - proyecto06-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  proyecto06-network:
+    driver: bridge

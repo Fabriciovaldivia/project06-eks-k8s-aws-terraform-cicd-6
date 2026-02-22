@@ -5,7 +5,7 @@ variable "region" {
 
 variable "cluster_name" {
   type    = string
-  default = "project05-eks"
+  default = "proyecto06-eks"
 }
 
 variable "vpc_cidr" {

@@ -1,0 +1,54 @@
+name: 🧨 Destroy Infraestructura
+
+on:
+  workflow_dispatch: # Se activa manualmente desde GitHub Actions
+
+jobs:
+  destroy:
+    name: 💣 Destruir Infraestructura Completa
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Descargar código
+        uses: actions/checkout@v4
+
+      - name: 🔐 Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+
+      - name: 🧹 Limpiar servicios de Kubernetes
+        continue-on-error: true
+        run: |
+          aws eks update-kubeconfig --name proyecto06-eks --region us-east-1
+          echo "Eliminando namespace proyecto06 (eliminará todos los recursos)..."
+          kubectl delete namespace proyecto06 --timeout=60s || echo "Namespace ya no existe"
+          sleep 30
+
+      - name: 🔧 Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: 🏗️ Inicializar Terraform
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: 🗑️ Eliminar Infraestructura con Terraform
+        run: terraform destroy -auto-approve
+        working-directory: ./terraform
+
+      - name: 🗑️ Eliminar Repositorios ECR
+        continue-on-error: true
+        run: |
+          for service in frontend backend database; do
+            aws ecr delete-repository --repository-name proyecto06-$service --region us-east-1 --force || echo "Repositorio proyecto06-$service no encontrado"
+          done
+
+      - name: ✅ Limpieza completada
+        run: |
+          echo "=== INFRAESTRUCTURA DESTRUIDA ==="
+          echo "✓ Cluster EKS eliminado"
+          echo "✓ VPC y subredes eliminadas"
+          echo "✓ Repositorios ECR eliminados"
+          echo "✓ IAM Roles eliminados"

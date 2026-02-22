@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: proyecto06
+  labels:
+    name: proyecto06
+
+---
+# ConfigMap para configuración compartida
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proyecto06-config
+  namespace: proyecto06
+data:
+  API_ENV: "production"
+  DATABASE_HOST: "database-service"
+  DATABASE_USER: "proyecto06"
+  DATABASE_NAME: "proyecto06_db"
+  BACKEND_SERVICE: "backend-service"

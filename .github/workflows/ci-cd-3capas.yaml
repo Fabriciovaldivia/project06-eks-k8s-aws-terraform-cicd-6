@@ -1,0 +1,139 @@
+name: 🚀 CI-CD-Proyecto06-3Capas
+
+on:
+  workflow_dispatch: # Se activa manualmente desde GitHub Actions
+
+jobs:
+  build-and-push:
+    name: 🏗️ Construir y Subir Imágenes
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        include:
+          - service: frontend
+            dockerfile: ./frontend/Dockerfile
+            context: ./frontend
+          - service: backend
+            dockerfile: ./backend/Dockerfile
+            context: ./backend
+          - service: database
+            dockerfile: ./database/Dockerfile
+            context: ./database
+
+    steps:
+      - name: 📥 Descargar código del repositorio
+        uses: actions/checkout@v4
+
+      - name: 🔐 Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+
+      - name: 🛠️ Crear repositorio ECR si no existe
+        run: |
+          SERVICE_NAME="proyecto06-${{ matrix.service }}"
+          aws ecr describe-repositories --repository-names $SERVICE_NAME --region us-east-1 || \
+          aws ecr create-repository --repository-name $SERVICE_NAME --region us-east-1 || echo "Repositorio ya existe"
+
+      - name: 🔑 Autenticarse en Amazon ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 | \
+          docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+      - name: 🏗️ Construir imagen Docker - ${{ matrix.service }}
+        run: |
+          docker build -t proyecto06-${{ matrix.service }}:latest \
+            -f ${{ matrix.dockerfile }} \
+            ${{ matrix.context }}
+
+      - name: 📦 Etiquetar imagen para ECR - ${{ matrix.service }}
+        run: |
+          docker tag proyecto06-${{ matrix.service }}:latest \
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/proyecto06-${{ matrix.service }}:latest
+          docker tag proyecto06-${{ matrix.service }}:latest \
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/proyecto06-${{ matrix.service }}:${{ github.sha }}
+
+      - name: 🚀 Subir imagen a Amazon ECR - ${{ matrix.service }}
+        run: |
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/proyecto06-${{ matrix.service }}:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/proyecto06-${{ matrix.service }}:${{ github.sha }}
+          echo "Imagen subida correctamente para ${{ matrix.service }}"
+
+  deploy-to-eks:
+    name: 🚀 Desplegar en EKS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Descargar código
+        uses: actions/checkout@v4
+
+      - name: 🔐 Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+
+      - name: 🛠️ Crear Backend S3 y DynamoDB para Terraform
+        run: |
+          aws s3api head-bucket --bucket proyecto06-terraform-state-eks 2>/dev/null || aws s3api create-bucket --bucket proyecto06-terraform-state-eks --region us-east-1
+          aws dynamodb describe-table --table-name proyecto06-terraform-lock-eks --region us-east-1 2>/dev/null || aws dynamodb create-table --table-name proyecto06-terraform-lock-eks --attribute-definitions AttributeName=LockID,AttributeType=S --key-schema AttributeName=LockID,KeyType=HASH --provisioned-throughput ReadCapacityUnits=1,WriteCapacityUnits=1 --region us-east-1
+
+      - name: 🔧 Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: 🏗️ Inicializar Terraform
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: 🚀 Aplicar Terraform
+        run: terraform apply -auto-approve
+        working-directory: ./terraform
+
+      - name: ✅ Actualizar kubeconfig
+        run: aws eks update-kubeconfig --name proyecto06-eks
+
+      - name: 🔄 Reemplazar ID de cuenta en manifiestos
+        run: sed -i "s|<ACCOUNT_ID>|${{ secrets.AWS_ACCOUNT_ID }}|g" k8s/*.yaml
+
+      - name: 📁 Crear namespace y ConfigMap
+        run: |
+          kubectl apply -f k8s/00-namespace.yaml
+
+      - name: 🗄️ Desplegar Base de Datos
+        run: |
+          kubectl apply -f k8s/01-database.yaml
+          echo "Esperando a que la base de datos esté lista..."
+          kubectl wait --for=condition=ready pod -l app=database -n proyecto06 --timeout=300s
+
+      - name: 🔙 Desplegar Backend
+        run: |
+          kubectl apply -f k8s/02-backend.yaml
+          echo "Esperando a que el backend esté listo..."
+          kubectl wait --for=condition=ready pod -l app=backend -n proyecto06 --timeout=300s
+
+      - name: 🎨 Desplegar Frontend
+        run: |
+          kubectl apply -f k8s/03-frontend.yaml
+          echo "Esperando a que el frontend esté listo..."
+          kubectl wait --for=condition=ready pod -l app=frontend -n proyecto06 --timeout=300s
+
+      - name: ✨ Obtener URLs de acceso
+        run: |
+          echo "=== SERVICIOS DESPLEGADOS ==="
+          echo ""
+          echo "Frontend (LoadBalancer):"
+          kubectl get svc frontend-service -n proyecto06
+          echo ""
+          echo "Backend (ClusterIP):"
+          kubectl get svc backend-service -n proyecto06
+          echo ""
+          echo "Database (Headless):"
+          kubectl get svc database-service -n proyecto06
+          echo ""
+          echo "Pods en ejecución:"
+          kubectl get pods -n proyecto06

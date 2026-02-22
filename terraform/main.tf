@@ -1,7 +1,7 @@
 module "vpc" {
   source = "./modules/vpc"
 
-  name = "vpc-proyecto-05"
+  name = "vpc-proyecto06"
   cidr = var.vpc_cidr
 }
 
