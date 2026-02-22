@@ -22,33 +22,58 @@ jobs:
       - name: 🧹 Limpiar servicios de Kubernetes
         continue-on-error: true
         run: |
-          aws eks update-kubeconfig --name proyecto06-eks --region us-east-1
-          echo "Eliminando namespace proyecto06 (eliminará todos los recursos)..."
-          kubectl delete namespace proyecto06 --timeout=60s || echo "Namespace ya no existe"
-          sleep 30
+          echo "Intentando actualizar kubeconfig para el cluster proyecto06-eks..."
+          if aws eks update-kubeconfig --name proyecto06-eks --region us-east-1; then
+            echo "✓ Kubeconfig actualizado. Eliminando namespace proyecto06..."
+            kubectl delete namespace proyecto06 --timeout=120s || echo "-> Namespace 'proyecto06' no encontrado o ya eliminado."
+            echo "Esperando 30 segundos para la terminación de recursos..."
+            sleep 30
+          else
+            echo "-> No se pudo conectar al cluster EKS. Es posible que ya haya sido eliminado. Saltando limpieza de Kubernetes."
+          fi
 
       - name: 🔧 Configurar Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: 🏗️ Inicializar Terraform
-        run: terraform init
+        run: terraform init -upgrade
         working-directory: ./terraform
 
-      - name: 🗑️ Eliminar Infraestructura con Terraform
-        run: terraform destroy -auto-approve
+      - name: 💣 Destruir Infraestructura de EKS con Terraform
+        run: terraform destroy -auto-approve -input=false
         working-directory: ./terraform
 
       - name: 🗑️ Eliminar Repositorios ECR
         continue-on-error: true
         run: |
+          echo "Eliminando repositorios ECR..."
           for service in frontend backend database; do
-            aws ecr delete-repository --repository-name proyecto06-$service --region us-east-1 --force || echo "Repositorio proyecto06-$service no encontrado"
+            REPO_NAME="proyecto06-$service"
+            echo "Intentando eliminar el repositorio $REPO_NAME..."
+            aws ecr delete-repository --repository-name $REPO_NAME --region us-east-1 --force || echo "-> Repositorio $REPO_NAME no encontrado o ya eliminado."
           done
+
+      - name: 🗑️ Eliminar Backend de Terraform (S3 y DynamoDB)
+        continue-on-error: true
+        run: |
+          S3_BUCKET="proyecto06-terraform-state-eks"
+          DYNAMO_TABLE="proyecto06-terraform-lock-eks"
+          
+          echo "Vaciando y eliminando bucket S3 para el estado de Terraform..."
+          aws s3 rb "s3://$S3_BUCKET" --force || echo "-> Bucket S3 '$S3_BUCKET' no encontrado o ya eliminado."
+          
+          echo "Eliminando tabla DynamoDB para el bloqueo de Terraform..."
+          aws dynamodb delete-table --table-name $DYNAMO_TABLE --region us-east-1 || echo "-> Tabla DynamoDB '$DYNAMO_TABLE' no encontrada o ya eliminada."
 
       - name: ✅ Limpieza completada
         run: |
-          echo "=== INFRAESTRUCTURA DESTRUIDA ==="
-          echo "✓ Cluster EKS eliminado"
-          echo "✓ VPC y subredes eliminadas"
-          echo "✓ Repositorios ECR eliminados"
-          echo "✓ IAM Roles eliminados"
+          echo ""
+          echo "╔════════════════════════════════════════════════════╗"
+          echo "║      ✓ INFRAESTRUCTURA DESTRUIDA EXITOSAMENTE      ║"
+          echo "╚════════════════════════════════════════════════════╝"
+          echo ""
+          echo "Resumen de la limpieza:"
+          echo "  - Recursos de Terraform (EKS, VPC, etc.) destruidos."
+          echo "  - Repositorios ECR (frontend, backend, database) eliminados."
+          echo "  - Backend de Terraform (S3, DynamoDB) eliminado."
+          echo ""
