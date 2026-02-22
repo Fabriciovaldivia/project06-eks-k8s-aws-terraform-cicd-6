@@ -117,7 +117,7 @@ jobs:
           aws eks update-kubeconfig --name proyecto06-eks --region us-east-1
           echo "Verificando conexión a Kubernetes..."
           kubectl cluster-info
-          kubectl version --short
+          kubectl version --client
           echo "✓ Kubeconfig actualizado correctamente"
 
       - name: 🔄 Reemplazar ID de cuenta en manifiestos
