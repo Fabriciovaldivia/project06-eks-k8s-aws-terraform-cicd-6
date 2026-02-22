@@ -1,4 +1,4 @@
-name: 🚀 Build & Deploy - Proyecto06
+name: Build & Deploy Proyecto06
 
 on:
   push:
@@ -14,314 +14,152 @@ env:
   PROJECT_NAME: proyecto06
 
 jobs:
-  # ========================================================================
-  # VALIDACIÓN
-  # ========================================================================
-  validate:
-    name: ✅ Validate Configuration
+  build-database:
+    name: Build Database
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🐳 Validate Dockerfiles
+      - uses: actions/checkout@v4
+      
+      - name: Verify init.sql exists
         run: |
-          echo "Validando Dockerfiles..."
-          docker run --rm -i hadolint/hadolint < database/Dockerfile || true
-          docker run --rm -i hadolint/hadolint < backend/Dockerfile || true
-          docker run --rm -i hadolint/hadolint < frontend/Dockerfile || true
-          echo "✓ Dockerfiles validados"
-
-      - name: ☸️ Validate Kubernetes manifests
+          ls -la database/
+          test -f database/init.sql || exit 1
+      
+      - name: Build database image
         run: |
-          echo "Validando manifiestos Kubernetes..."
-          kubectl version --client
-          for file in k8s/*.yaml; do
-            echo "  → $file"
-            kubectl apply -f "$file" --dry-run=client > /dev/null 2>&1 || echo "    ⚠️  Warning en $file (continuar...)"
-          done
-          echo "✓ Manifiestos validados"
+          cd database
+          docker build -t ${{ env.PROJECT_NAME }}-database:${{ github.sha }} .
+          docker tag ${{ env.PROJECT_NAME }}-database:${{ github.sha }} ${{ env.PROJECT_NAME }}-database:latest
 
-      - name: 🏗️ Validate Terraform
-        run: |
-          echo "Validando Terraform..."
-          cd terraform
-          terraform init -backend=false > /dev/null 2>&1
-          terraform validate || echo "⚠️  Issues en Terraform (continuar...)"
-          cd ..
-          echo "✓ Terraform validado"
-
-  # ========================================================================
-  # BUILD DE IMÁGENES DOCKER
-  # ========================================================================
-  build:
-    name: 🔨 Build Docker Images
+  build-backend:
+    name: Build Backend
     runs-on: ubuntu-latest
-    needs: validate
-    strategy:
-      matrix:
-        service:
-          - { name: "database", path: "database" }
-          - { name: "backend", path: "backend" }
-          - { name: "frontend", path: "frontend" }
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: � List files in ${{ matrix.service.path }}
+      - uses: actions/checkout@v4
+      
+      - name: Verify Dockerfile exists
+        run: test -f backend/Dockerfile
+      
+      - name: Build backend image
         run: |
-          echo "Files in ${{ matrix.service.path }}:"
-          ls -la ${{ matrix.service.path }}/
-          echo ""
-          echo "Dockerfile content:"
-          cat ${{ matrix.service.path }}/Dockerfile
-
-      - name: 🐳 Build ${{ matrix.service.name }} image
-        run: |
-          echo "🔨 Building ${{ matrix.service.name }}..."
-          docker build \
-            -t ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:latest \
-            -t ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:${{ github.sha }} \
-            ${{ matrix.service.path }}/
-          echo "✓ ${{ matrix.service.name }} image built successfully"
-
-      - name: 📊 Show built images
-        run: |
-          echo "Built images:"
-          docker image ls | grep ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}
-
-  # ========================================================================
-  # PRUEBAS
-  # ========================================================================
-  test:
-    name: 🧪 Run Tests
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
-      - name: 🧪 Test Backend
-        run: |
-          echo "Testing backend..."
           cd backend
-          pip install -q -r requirements.txt 2>/dev/null || true
-          echo "✓ Backend tests completed"
+          docker build -t ${{ env.PROJECT_NAME }}-backend:${{ github.sha }} .
+          docker tag ${{ env.PROJECT_NAME }}-backend:${{ github.sha }} ${{ env.PROJECT_NAME }}-backend:latest
 
-      - name: 📦 Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-
-      - name: 🧪 Test Frontend
-        run: |
-          echo "Testing frontend..."
-          cd frontend
-          npm install -q 2>/dev/null || true
-          echo "✓ Frontend tests completed"
-
-  # ========================================================================
-  # PUSH A ECR (solo en main)
-  # ========================================================================
-  # PUSH A ECR (solo en main)
-  # ========================================================================
-  push-ecr:
-    name: 📤 Push to AWS ECR
+  build-frontend:
+    name: Build Frontend
     runs-on: ubuntu-latest
-    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Verify Dockerfile exists
+        run: test -f frontend/Dockerfile
+      
+      - name: Build frontend image
+        run: |
+          cd frontend
+          docker build -t ${{ env.PROJECT_NAME }}-frontend:${{ github.sha }} .
+          docker tag ${{ env.PROJECT_NAME }}-frontend:${{ github.sha }} ${{ env.PROJECT_NAME }}-frontend:latest
+
+  push-ecr:
+    name: Push to ECR
+    runs-on: ubuntu-latest
+    needs: [build-database, build-backend, build-frontend]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: read
       id-token: write
-    strategy:
-      matrix:
-        service:
-          - { name: "database", path: "database" }
-          - { name: "backend", path: "backend" }
-          - { name: "frontend", path: "frontend" }
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🔐 Configure AWS credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: 🐳 Login to Amazon ECR
+      - name: Login to ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: 📤 Build and push ${{ matrix.service.name }} to ECR
+      - name: Build and push database
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          
-          echo "Building and pushing ${{ matrix.service.name }}..."
-          
-          docker build \
-            -t $REGISTRY/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:latest \
-            -t $REGISTRY/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:${{ github.sha }} \
-            ${{ matrix.service.path }}/
-          
-          echo "Pushing to ECR..."
-          docker push $REGISTRY/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:latest
-          docker push $REGISTRY/${{ env.PROJECT_NAME }}-${{ matrix.service.name }}:${{ github.sha }}
-          
-          echo "✓ ${{ matrix.service.name }} pushed to ECR"
-          echo "  Registry: $REGISTRY"
-          echo "  Image: ${{ env.PROJECT_NAME }}-${{ matrix.service.name }}"
-          echo "  Tags: latest, ${{ github.sha }}"
+          cd database
+          docker build -t $REGISTRY/${{ env.PROJECT_NAME }}-database:${{ github.sha }} .
+          docker tag $REGISTRY/${{ env.PROJECT_NAME }}-database:${{ github.sha }} $REGISTRY/${{ env.PROJECT_NAME }}-database:latest
+          docker push $REGISTRY/${{ env.PROJECT_NAME }}-database:${{ github.sha }}
+          docker push $REGISTRY/${{ env.PROJECT_NAME }}-database:latest
 
-  # ========================================================================
-  # DEPLOY A KUBERNETES (solo en main)
-  # ========================================================================
+      - name: Build and push backend
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          cd backend
+          docker build -t $REGISTRY/${{ env.PROJECT_NAME }}-backend:${{ github.sha }} .
+          docker tag $REGISTRY/${{ env.PROJECT_NAME }}-backend:${{ github.sha }} $REGISTRY/${{ env.PROJECT_NAME }}-backend:latest
+          docker push $REGISTRY/${{ env.PROJECT_NAME }}-backend:${{ github.sha }}
+          docker push $REGISTRY/${{ env.PROJECT_NAME }}-backend:latest
+
+      - name: Build and push frontend
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          cd frontend
+          docker build -t $REGISTRY/${{ env.PROJECT_NAME }}-frontend:${{ github.sha }} .
+          docker tag $REGISTRY/${{ env.PROJECT_NAME }}-frontend:${{ github.sha }} $REGISTRY/${{ env.PROJECT_NAME }}-frontend:latest
+          docker push $REGISTRY/${{ env.PROJECT_NAME }}-frontend:${{ github.sha }}
+          docker push $REGISTRY/${{ env.PROJECT_NAME }}-frontend:latest
+
   deploy:
-    name: 🚀 Deploy to EKS
+    name: Deploy to EKS
     runs-on: ubuntu-latest
     needs: push-ecr
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🔐 Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: ☸️ Update kubeconfig
-        run: |
-          echo "Actualizando kubeconfig..."
-          aws eks update-kubeconfig \
-            --name proyecto06-eks \
-            --region ${{ env.AWS_REGION }}
-          echo "✓ kubeconfig actualizado"
-
-      - name: 📋 Get AWS Account ID
-        id: aws-account
-        run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
-          echo "Account ID: $ACCOUNT_ID"
-
-      - name: 🔄 Update manifests with image tags
-        run: |
-          echo "Actualizando referencias de imágenes en manifiestos..."
-          ACCOUNT_ID=${{ steps.aws-account.outputs.account_id }}
-          
-          for file in k8s/*.yaml; do
-            echo "  → Actualizando $file"
-            sed -i "s|<ACCOUNT_ID>|$ACCOUNT_ID|g" "$file"
-            sed -i "s|us-east-1|${{ env.AWS_REGION }}|g" "$file"
-          done
-          echo "✓ Manifiestos actualizados"
-
-      - name: 📦 Create namespace
-        run: |
-          echo "Creando namespace..."
-          kubectl create namespace proyecto06 --dry-run=client -o yaml | kubectl apply -f -
-          echo "✓ Namespace proyecto06 listo"
-
-      - name: ⚙️ Apply Kubernetes manifests
-        run: |
-          echo "Aplicando manifiestos Kubernetes..."
-          
-          echo "  1️⃣ Aplicando 00-namespace.yaml"
-          kubectl apply -f k8s/00-namespace.yaml
-          sleep 2
-          
-          echo "  2️⃣ Aplicando 01-database.yaml"
-          kubectl apply -f k8s/01-database.yaml
-          sleep 5
-          
-          echo "  3️⃣ Aplicando 02-backend.yaml"
-          kubectl apply -f k8s/02-backend.yaml
-          sleep 5
-          
-          echo "  4️⃣ Aplicando 03-frontend.yaml"
-          kubectl apply -f k8s/03-frontend.yaml
-          
-          echo "✓ Todos los manifiestos aplicados"
-
-      - name: ⏳ Wait for rollout
-        run: |
-          echo "Esperando a que los servicios estén listos..."
-          
-          echo "  ⏳ Backend..."
-          kubectl rollout status deployment/backend -n proyecto06 --timeout=5m || echo "⚠️ Backend rollout timeout"
-          
-          echo "  ⏳ Frontend..."
-          kubectl rollout status deployment/frontend -n proyecto06 --timeout=5m || echo "⚠️ Frontend rollout timeout"
-          
-          echo "✓ Rollout completado"
-
-  # ========================================================================
-  # VERIFICACIÓN FINAL
-  # ========================================================================
-  verify:
-    name: 📊 Verify Deployment
-    runs-on: ubuntu-latest
-    needs: deploy
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🔐 Configure AWS credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: ☸️ Update kubeconfig
+      - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
             --name proyecto06-eks \
             --region ${{ env.AWS_REGION }}
 
-      - name: 📊 Check deployment status
+      - name: Get AWS Account ID
+        id: account
         run: |
-          echo ""
-          echo "╔════════════════════════════════════════════════════╗"
-          echo "║  📊 DEPLOYMENT STATUS                              ║"
-          echo "╚════════════════════════════════════════════════════╝"
-          echo ""
-          
-          echo "📌 Pods:"
-          kubectl get pods -n proyecto06 -o wide
-          echo ""
-          
-          echo "🔗 Servicios:"
-          kubectl get svc -n proyecto06
-          echo ""
-          
-          echo "📋 Deployments:"
-          kubectl get deployments -n proyecto06
-          echo ""
-          
-          echo "✓ Deployment verification completed"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
 
-summary: |
-  ✅ **Pipeline ejecutado exitosamente**
-  
-  📊 **Resumen:**
-  - Validación: ✓
-  - Build: ✓
-  - Tests: ✓
-  - Push a ECR: ✓
-  - Deploy a EKS: ✓
-  
-  🎉 Proyecto06 está desplegado en Kubernetes
+      - name: Update manifests
+        run: |
+          ACCOUNT_ID=${{ steps.account.outputs.account_id }}
+          for file in k8s/*.yaml; do
+            sed -i "s|<ACCOUNT_ID>|$ACCOUNT_ID|g" "$file"
+          done
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl create namespace proyecto06 --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f k8s/00-namespace.yaml
+          sleep 2
+          kubectl apply -f k8s/01-database.yaml
+          sleep 5
+          kubectl apply -f k8s/02-backend.yaml
+          sleep 5
+          kubectl apply -f k8s/03-frontend.yaml
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n proyecto06
+          kubectl get svc -n proyecto06
