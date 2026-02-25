@@ -30,7 +30,7 @@ spec:
       serviceAccountName: backend-sa
       containers:
       - name: backend
-        image: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/proyecto06-backend:latest
+        image: 921292479940.dkr.ecr.us-east-1.amazonaws.com/proyecto06-backend:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000

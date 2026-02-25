@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/proyecto06-frontend:latest
+        image: 921292479940.dkr.ecr.us-east-1.amazonaws.com/proyecto06-frontend:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
@@ -80,7 +80,7 @@ metadata:
   labels:
     app: frontend
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: frontend
     tier: web

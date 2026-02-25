@@ -20,7 +20,7 @@ spec:
   resources:
     requests:
       storage: 5Gi
-  storageClassName: standard
+  storageClassName: gp2
 
 ---
 apiVersion: apps/v1
@@ -46,7 +46,7 @@ spec:
     spec:
       containers:
       - name: postgres
-        image: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/proyecto06-database:latest
+        image: 921292479940.dkr.ecr.us-east-1.amazonaws.com/proyecto06-database:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5432
