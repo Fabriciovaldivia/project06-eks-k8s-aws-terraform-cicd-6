@@ -120,18 +120,17 @@ jobs:
           kubectl version --client
           echo "✓ Kubeconfig actualizado correctamente"
 
-      - name: 🔄 Reemplazar ID de cuenta en manifiestos
+      - name: ⛑️ Install AWS Load Balancer Controller via Helm
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "AWS Account ID: $ACCOUNT_ID"
-          
-          for file in k8s/*.yaml; do
-            echo "Actualizando $file..."
-            sed -i "s|<ACCOUNT_ID>|$ACCOUNT_ID|g" "$file"
-            sed -i "s|us-east-1|us-east-1|g" "$file"
-          done
-          
-          echo "✓ Manifiestos actualizados"
+          echo "Instalando AWS Load Balancer Controller..."
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            -n kube-system \
+            --set clusterName=proyecto06-eks \
+            --set serviceAccount.create=true \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/proyecto06-eks-alb-controller-role"
 
       - name: 📁 Crear namespace y ConfigMap
         run: |
@@ -170,6 +169,17 @@ jobs:
           kubectl get pods -n proyecto06
           echo "✓ Frontend desplegado"
 
+      - name: 🌐 Desplegar Ingress
+        run: |
+          echo "Desplegando Ingress..."
+          kubectl apply -f k8s/04-ingress.yaml
+          echo "Esperando a que el Load Balancer obtenga una dirección (timeout: 5 min)..."
+          # No usamos 'wait' aquí porque el Ingress no tiene una condición 'ready' estándar.
+          # Simplemente esperamos un poco y mostramos el estado.
+          sleep 60 
+          kubectl get ingress -n proyecto06
+          echo "✓ Solicitud de Ingress enviada"
+
       - name: ✨ Obtener URLs de acceso
         run: |
           echo ""
@@ -179,8 +189,8 @@ jobs:
           echo ""
           echo "📊 SERVICIOS DESPLEGADOS:"
           echo ""
-          echo "🎨 Frontend (LoadBalancer):"
-          kubectl get svc frontend-service -n proyecto06 || echo "  (Pendiente de asignación)"
+          echo "🌐 Ingress (Application Load Balancer):"
+          kubectl get ingress proyecto06-ingress -n proyecto06 || echo "  (Pendiente de asignación de URL, puede tardar unos minutos)"
           echo ""
           echo "🔙 Backend (ClusterIP):"
           kubectl get svc backend-service -n proyecto06

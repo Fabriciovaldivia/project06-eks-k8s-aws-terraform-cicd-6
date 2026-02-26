@@ -79,6 +79,9 @@ metadata:
   namespace: proyecto06
   labels:
     app: frontend
+  annotations:
+    # Especifica la ruta de health check para el Target Group del ALB (Nginx responde en /)
+    alb.ingress.kubernetes.io/healthcheck-path: /
 spec:
   type: ClusterIP
   selector:
