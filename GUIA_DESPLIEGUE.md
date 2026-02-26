@@ -190,7 +190,7 @@ El pipeline automaticamente:
 3. ✅ Crea el cluster EKS con Terraform
 4. ✅ Despliega los 3 servicios en K8s
 
-**Tiempo estimado**: ~15-20 minutos
+**Tiempo estimado**: ~15-20 minutossas
 
 #### 4. Monitorear progreso
 ```bash
