@@ -90,3 +90,57 @@ resource "aws_eks_addon" "ebs_csi" {
     aws_eks_node_group.nodes
   ]
 }
+
+# --- AWS Load Balancer Controller ---
+
+# 1. Descargar y crear la política IAM para el controlador
+data "http" "iam_policy" {
+  url = "https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.1/docs/install/iam_policy.json"
+}
+
+resource "aws_iam_policy" "alb_controller_policy" {
+  name        = "${var.cluster_name}-alb-controller-policy"
+  description = "IAM policy for the AWS Load Balancer Controller"
+  policy      = data.http.iam_policy.response_body
+}
+
+# 2. Crear el Rol IAM y la Política de Confianza para el controlador
+data "aws_iam_policy_document" "alb_controller_trust" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub"
+      values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+    }
+  }
+}
+
+resource "aws_iam_role" "alb_controller_role" {
+  name               = "${var.cluster_name}-alb-controller-role"
+  assume_role_policy = data.aws_iam_policy_document.alb_controller_trust.json
+}
+
+resource "aws_iam_role_policy_attachment" "alb_controller_attach" {
+  policy_arn = aws_iam_policy.alb_controller_policy.arn
+  role       = aws_iam_role.alb_controller_role.name
+}
+
+# 3. Instalar el Add-on del AWS Load Balancer Controller
+resource "aws_eks_addon" "alb_controller" {
+  cluster_name             = aws_eks_cluster.this.name
+  addon_name               = "aws-load-balancer-controller"
+  service_account_role_arn = aws_iam_role.alb_controller_role.arn
+  resolve_conflicts        = "OVERWRITE"
+  depends_on = [
+    aws_eks_node_group.nodes,
+    aws_iam_role.alb_controller_role
+  ]
+}
