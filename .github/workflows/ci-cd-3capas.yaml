@@ -122,6 +122,10 @@ jobs:
 
       - name: ⛑️ Install AWS Load Balancer Controller via Helm
         run: |
+          echo "Obteniendo VPC ID..."
+          VPC_ID=$(aws eks describe-cluster --name proyecto06-eks --query "cluster.resourcesVpcConfig.vpcId" --output text)
+          echo "VPC ID detectado: $VPC_ID"
+
           echo "Instalando AWS Load Balancer Controller..."
           helm repo add eks https://aws.github.io/eks-charts
           helm repo update
@@ -130,6 +134,8 @@ jobs:
             --set clusterName=proyecto06-eks \
             --set serviceAccount.create=true \
             --set serviceAccount.name=aws-load-balancer-controller \
+            --set region=us-east-1 \
+            --set vpcId=$VPC_ID \
             --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/proyecto06-eks-alb-controller-role"
 
       - name: ⏳ Wait for Load Balancer Controller to be ready
