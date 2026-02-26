@@ -135,3 +135,14 @@ resource "aws_iam_role_policy_attachment" "alb_controller_attach" {
   policy_arn = aws_iam_policy.alb_controller_policy.arn
   role       = aws_iam_role.alb_controller_role.name
 }
+
+# Adjuntar politicas adicionales temporales para el ALB Controller (Debug)
+resource "aws_iam_role_policy_attachment" "alb_controller_ec2_full" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+  role       = aws_iam_role.alb_controller_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "alb_controller_elb_full" {
+  policy_arn = "arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess"
+  role       = aws_iam_role.alb_controller_role.name
+}
