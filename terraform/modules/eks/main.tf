@@ -28,7 +28,7 @@ resource "aws_eks_node_group" "nodes" {
   depends_on = [aws_eks_cluster.this]
 }
 
-# 1. Configurar el OIDC Provider (necesario para vincular K8s con IAM)
+# 1. Configurar el OIDC Provsssider (necesario para vincular K8s con IAM)
 # Obtiene el certificado TLS del cluster
 data "tls_certificate" "eks" {
   url = aws_eks_cluster.this.identity[0].oidc[0].issuer
