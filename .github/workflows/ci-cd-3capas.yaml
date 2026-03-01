@@ -117,7 +117,19 @@ jobs:
         run: |
           echo "⚠️ Terraform falló durante la aplicación. Eliminando recursos incompletos para evitar costos y errores..."
           cd terraform
-          terraform destroy -auto-approve -input=false
+          
+          # Intentar destruir primero. Si falla por "Cluster unreachable", limpiamos el estado.
+          if ! terraform destroy -auto-approve -input=false; then
+            echo "⚠️ Error al destruir: El cluster Kubernetes podría no ser accesible."
+            echo "🧹 Eliminando recursos Helm del estado para forzar la destrucción de la infraestructura..."
+            
+            # Eliminar del estado los recursos que requieren conexión al cluster
+            terraform state rm helm_release.kube_prometheus_stack || true
+            terraform state rm helm_release.k8sgpt_operator || true
+            
+            echo "🔄 Reintentando destrucción de infraestructura AWS..."
+            terraform destroy -auto-approve -input=false
+          fi
           cd ..
 
       - name: ✅ Actualizar kubeconfig
