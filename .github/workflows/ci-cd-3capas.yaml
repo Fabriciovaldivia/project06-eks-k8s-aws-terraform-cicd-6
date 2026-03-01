@@ -106,9 +106,18 @@ jobs:
           cd ..
 
       - name: 🚀 Aplicar Terraform
+        id: tf_apply
         run: |
           cd terraform
           terraform apply -auto-approve -input=false
+          cd ..
+
+      - name: 💣 Rollback Terraform (Limpieza por fallo en creación)
+        if: failure() && steps.tf_apply.outcome == 'failure'
+        run: |
+          echo "⚠️ Terraform falló durante la aplicación. Eliminando recursos incompletos para evitar costos y errores..."
+          cd terraform
+          terraform destroy -auto-approve -input=false
           cd ..
 
       - name: ✅ Actualizar kubeconfig
@@ -218,3 +227,24 @@ jobs:
           kubectl get deployments -n proyecto06
           echo ""
           echo "✓ Pipeline completado exitosamente!"
+
+      - name: 🚨 Rollback Automático por Error
+        if: failure() && steps.tf_apply.outcome == 'success'
+        run: |
+          echo "⚠️ DETECTADO FALLO EN EL PIPELINE - INICIANDO ROLLBACK ⚠️"
+          
+          # Intentar conectar al cluster (por si el fallo fue posterior a la creación del cluster)
+          if aws eks update-kubeconfig --name proyecto06-eks --region us-east-1; then
+            echo "✓ Conexión al cluster establecida. Intentando revertir despliegues..."
+            
+            echo "🔙 Revirtiendo Frontend..."
+            kubectl rollout undo deployment/frontend -n proyecto06 || echo "-> No se pudo revertir frontend (quizás es el primer despliegue)"
+            
+            echo "🔙 Revirtiendo Backend..."
+            kubectl rollout undo deployment/backend -n proyecto06 || echo "-> No se pudo revertir backend"
+            
+            echo "🔙 Revirtiendo Database..."
+            kubectl rollout undo statefulset/database -n proyecto06 || echo "-> No se pudo revertir database"
+          else
+            echo "❌ No se pudo conectar al cluster. El fallo ocurrió antes de tener acceso a Kubernetes o en Terraform."
+          fi
