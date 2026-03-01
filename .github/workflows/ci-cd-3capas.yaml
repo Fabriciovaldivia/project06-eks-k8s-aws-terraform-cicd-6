@@ -105,6 +105,17 @@ jobs:
           terraform init -upgrade
           cd ..
 
+      - name: 🚑 Reparar Estado Terraform (Auto-heal)
+        run: |
+          cd terraform
+          # Si el cluster no existe en AWS (fue borrado manualmente), limpiamos el estado de Helm
+          if ! aws eks describe-cluster --name proyecto06-eks --region us-east-1 >/dev/null 2>&1; then
+            echo "⚠️ Cluster no encontrado en AWS. Limpiando estado de Helm para evitar errores de conexión..."
+            terraform state rm helm_release.kube_prometheus_stack || true
+            terraform state rm helm_release.k8sgpt_operator || true
+          fi
+          cd ..
+
       - name: 🚀 Aplicar Terraform
         id: tf_apply
         run: |
